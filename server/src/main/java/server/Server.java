@@ -12,101 +12,107 @@ import java.util.Vector;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class Server {
-    private static ServerSocket server;
-    private static Socket socket;
+	private static ServerSocket server;
+	private static Socket socket;
 
-    private static final int PORT = 8189;
-    private List<ClientHandler> clients;
-    private AuthService authService;
+	private static final int PORT = 8189;
+	private List<ClientHandler> clients;
+	private AuthService authService;
 
-    public Server() {
-        clients = new CopyOnWriteArrayList<>();
-        authService = new SimpleAuthService();
+	public Server() {
+		clients = new CopyOnWriteArrayList<>();
 
-        try {
-            server = new ServerSocket(PORT);
-            System.out.println("Server started");
+		if (!DBAuthService.connect()) {
+			new RuntimeException("Can not connect to database");
+		}
 
-            while (true) {
-                socket = server.accept();
-                System.out.println(socket.getLocalSocketAddress());
-                System.out.println("Client connect: " + socket.getRemoteSocketAddress());
-                new ClientHandler(this, socket);
-            }
+		authService = new DBAuthService();
 
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                socket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            try {
-                server.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
+		try {
+			server = new ServerSocket(PORT);
+			System.out.println("Server started");
 
-    public void broadcastMsg(ClientHandler sender, String msg) {
-        String message = String.format("%s : %s", sender.getNickname(), msg);
-        for (ClientHandler c : clients) {
-            c.sendMsg(message);
-        }
-    }
+			while (true) {
+				socket = server.accept();
+				System.out.println(socket.getLocalSocketAddress());
+				System.out.println("Client connect: " + socket.getRemoteSocketAddress());
+				new ClientHandler(this, socket);
+			}
 
-    public void privateMsg(ClientHandler sender, String receiver, String msg) {
-        String message = String.format("[ %s ] to [ %s ] : %s", sender.getNickname(), receiver, msg);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			DBAuthService.disconnect();
+			try {
+				socket.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			try {
+				server.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 
-        for (ClientHandler c : clients) {
-            if (c.getNickname().equals(receiver)) {
-                c.sendMsg(message);
-                if (sender.equals(c)) {
-                    return;
-                }
-                sender.sendMsg(message);
-                return;
-            }
-        }
-        sender.sendMsg("not found user: " + receiver);
-    }
+	public void broadcastMsg(ClientHandler sender, String msg) {
+		String message = String.format("%s : %s", sender.getNickname(), msg);
+		for (ClientHandler c : clients) {
+			c.sendMsg(message);
+		}
+	}
 
-    public void subscribe(ClientHandler clientHandler) {
-        clients.add(clientHandler);
-        broadcastClientList();
-    }
+	public void privateMsg(ClientHandler sender, String receiver, String msg) {
+		String message = String.format("[ %s ] to [ %s ] : %s", sender.getNickname(), receiver, msg);
 
-    public void unsubscribe(ClientHandler clientHandler) {
-        clients.remove(clientHandler);
-        broadcastClientList();
-    }
+		for (ClientHandler c : clients) {
+			if (c.getNickname().equals(receiver)) {
+				c.sendMsg(message);
+				if (sender.equals(c)) {
+					return;
+				}
+				sender.sendMsg(message);
+				return;
+			}
+		}
+		sender.sendMsg("not found user: " + receiver);
+	}
 
-    public AuthService getAuthService() {
-        return authService;
-    }
+	public void subscribe(ClientHandler clientHandler) {
+		clients.add(clientHandler);
+		broadcastClientList();
+	}
 
-    public boolean isLoginAuthenticated(String login) {
-        for (ClientHandler c : clients) {
-            if (c.getLogin().equals(login)) {
-                return true;
-            }
-        }
+	public void unsubscribe(ClientHandler clientHandler) {
+		clients.remove(clientHandler);
+		broadcastClientList();
+	}
 
-        return false;
-    }
+	public AuthService getAuthService() {
+		return authService;
+	}
 
-    public void broadcastClientList() {
-        StringBuilder sb = new StringBuilder("/clientlist");
-        for (ClientHandler c : clients) {
-            sb.append(" ").append(c.getNickname());
-        }
+	public boolean isLoginAuthenticated(String login) {
+		for (ClientHandler c : clients) {
+			if (c.getLogin().equals(login)) {
+				return true;
+			}
+		}
 
-        String msg = sb.toString();
+		return false;
+	}
 
-        for (ClientHandler c : clients) {
-            c.sendMsg(msg);
-        }
-    }
+	public void broadcastClientList() {
+		StringBuilder sb = new StringBuilder("/clientlist");
+		for (ClientHandler c : clients) {
+			sb.append(" ").append(c.getNickname());
+		}
+
+		String msg = sb.toString();
+
+		for (ClientHandler c : clients) {
+			c.sendMsg(msg);
+		}
+	}
 }
