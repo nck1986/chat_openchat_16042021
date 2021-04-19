@@ -1,0 +1,5 @@
+asd : ex
+asd : ti-rex
+asd : путь файла
+asd : asd
+asd : asdasd
